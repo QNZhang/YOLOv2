@@ -4,6 +4,7 @@ import os
 import cv2
 import numpy as np
 import xml.etree.ElementTree as ET
+from config import Config
 from torch.utils.data import Dataset
 from misc.utils import Compose, HSVAdjust, VerticalFlip, Crop, Resize
 
@@ -33,21 +34,29 @@ class VOCdataset(Dataset):
         id = self.ids[item]
         image_path = os.path.join(self.data_path, "JPEGImages", "{}.jpg".format(id))
         image = cv2.imread(image_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image_xml_path = os.path.join(self.data_path, "Annotations", "{}.xml".format(id))
         annot = ET.parse(image_xml_path)
 
+        size_elem = annot.find("size")
+        im_w = int(size_elem.find("width").text)
+        im_h = int(size_elem.find("height").text)
+
         objects = []
         for obj in annot.findall('object'):
-            xmin, xmax, ymin, ymax = [int(obj.find('bndbox').find(tag).text) - 1 for tag in
+            xmin, xmax, ymin, ymax = [int(obj.find('bndbox').find(tag).text) for tag in
                                       ["xmin", "xmax", "ymin", "ymax"]]
             label = self.classes.index(obj.find('name').text.lower().strip())
+
+            w_ratio = Config.im_w / im_w
+            h_ratio = Config.im_h / im_h
+            xmin = int(xmin * w_ratio)
+            xmax = int(xmax * w_ratio)
+            ymin = int(ymin * h_ratio)
+            ymax = int(ymax * h_ratio)
+
             objects.append([xmin, ymin, xmax, ymax, label])
 
-        if self.is_training:
-            transformations = Compose([HSVAdjust(), VerticalFlip(), Crop(), Resize(self.image_size)])
-        else:
-            transformations = Compose([Resize(self.image_size)])
-        image, objects = transformations((image, objects))
+        image = cv2.resize(image, (Config.im_w, Config.im_h))
 
         return np.transpose(np.array(image, dtype=np.float32), (2, 0, 1)), np.array(objects, dtype=np.float32)

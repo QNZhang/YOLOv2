@@ -4,6 +4,7 @@ https://github.com/uvipen/Yolo-v2-pytorch
 """
 import torch.nn as nn
 import torch
+from config import Config
 
 
 class DarkNet19(nn.Module):
@@ -97,6 +98,9 @@ class DarkNet19(nn.Module):
         output = torch.cat((output_1, output_2), 1)
         output = self.stage3_conv1(output)
         output = self.stage3_conv2(output)
+
+        output = output.permute(0, 2, 3, 1).contiguous()
+        output = output.view(Config.train_batch_size, Config.S, Config.S, len(self.anchors), 25)
 
         return output
 

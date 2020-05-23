@@ -9,15 +9,13 @@ from torch.utils.data.dataloader import default_collate
 
 class Utils:
 
+    """ from: https://github.com/uvipen/Yolo-v2-pytorch """
     def custom_collate_fn(batch):
         items = list(zip(*batch))
         items[0] = default_collate(items[0])
-        items[1] = default_collate(items[1])
-        items[2] = list(items[2])
-        items[3] = default_collate(items[3])
+        items[1] = list(items[1])
         return items
 
-    """ from: https://github.com/uvipen/Yolo-v2-pytorch """
     @staticmethod
     def bbox_ious(boxes1, boxes2):
         b1x1, b1y1 = (boxes1[:, :2] - (boxes1[:, 2:4] / 2)).split(1, 1)

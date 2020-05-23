@@ -23,8 +23,6 @@ class Trainer:
         print("Training process initialized...")
         print("dataset: ", Config.training_dir)
 
-        #folder_dataset = dset.ImageFolder(root=Config.training_dir)
-
         dataset = VOCdataset(Config.training_dir, "2012", "train", Config.im_w)
 
         train_dataloader = DataLoader(dataset,
@@ -69,7 +67,9 @@ class Trainer:
         for epoch in range(starting_ep, Config.train_number_epochs):
 
             average_epoch_loss = 0
-            count = 0
+            average_loc_l = 0
+            average_conf_l = 0
+            average_cls_l = 0
             start_time = time.time()
 
             for i, data in enumerate(train_dataloader, 0):
@@ -77,67 +77,37 @@ class Trainer:
                 #print(i)
                 #reset_time = time.time()
 
-                img0, img1, targets, ima = data
-                img0, img1 = img0.cuda(), img1.cuda()
-
-                #print(type(ima[0]))
+                img, targets = data
+                img = img.cuda()
 
                 optimizer.zero_grad()
 
-                #print("Loading data: ", time.time() - reset_time)
-                #reset_time = time.time()
+                predictions = net(img)
 
-                predictions = net(img0, img1)
-
-                #print("predictions: ", time.time() - reset_time)
-                #reset_time = time.time()
-
-                loc_l, conf_l, noobj_conf_l, loss = criterion(predictions, targets)
-
-                #print("Loss: ", time.time() - reset_time)
-                #reset_time = time.time()
+                loss, loc_l, conf_l, cls_l, cv_im = criterion(predictions, targets, img)
 
                 loss.backward()
                 optimizer.step()
 
-                #print("backprop: ", time.time() - reset_time)
-
                 average_epoch_loss += loss
-                count += 1
+                average_loc_l += loc_l
+                average_conf_l += conf_l
+                average_cls_l += cls_l
 
-                #print("p_mean: ", torch.mean(predictions))
-                #print("p_std : ", torch.std(predictions))
-                #print("mean xy:", torch.mean(predictions[:, :, :, :, :2]))
-                #print("std xy: ", torch.std(predictions[:, :, :, :, :2]))
-                #print("max xy: ", torch.max(predictions[:, :, :, :, :2]))
-                #print("mean wh:", torch.mean(predictions[:, :, :, :, 2:4]))
-                #print("std wh: ", torch.std(predictions[:, :, :, :, 2:4]))
-                #print("max wh: ", torch.max(predictions[:, :, :, :, 2:4]))
-                #print("conf mean: ", torch.mean(torch.sigmoid(predictions[:, :, :, :, 4])))
-                #print("conf max : ", torch.max(torch.sigmoid(predictions[:, :, :, :, 4])))
-
-                #print("=")
-                #print("loss total: ", loss)
-                #print("loss loc :  ", loc_l)
-                #print("loss conf:  ", conf_l)
-                #print("loss nconf: ", noobj_conf_l)
-                #print("loss cls: ", cls_l)
-                #print("====")
-                #cv2.imshow("im", im)
+                cv2.imshow("im", cv_im)
                 #cv2.imshow("iml", iml)
                 #cv2.imshow("imc", imc)
                 #cv2.imshow("imnc", imnc)
-                #cv2.waitKey(1)
-
-                #print(name0)
-                #print(name1)
+                cv2.waitKey(1)
 
             end_time = time.time() - start_time
             print("time: ", end_time)
 
             iteration_number += 1
-            average_epoch_loss = average_epoch_loss / count
-            #print(count)
+            average_epoch_loss = average_epoch_loss / i
+            print("ll : ", average_loc_l / i)
+            print("cl : ", average_conf_l / i)
+            print("nll: ", average_cls_l / i)
 
             print("Epoch number {}\n Current loss {}\n".format(epoch, average_epoch_loss))
             counter.append(iteration_number)

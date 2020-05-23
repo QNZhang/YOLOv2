@@ -1,14 +1,14 @@
 class Config:
 
     ####### Dataset
-    training_dir = "/home/camilo/Documents/3.datasets"
+    training_dir = "/home/mmv/Documents/3.datasets"
     testing_dir = "/home/mmv/Documents/3.datasets/openlogo/preproc/3/testing/"
 
     annotations_dir = "/home/mmv/Documents/3.datasets/openlogo/Annotations/"
 
     ####### Model params
-    train_batch_size = 32
-    train_number_epochs = 1000
+    train_batch_size = 15
+    train_number_epochs = 200
     lrate = 0.0005
 
     # dark 416,416
@@ -29,7 +29,7 @@ class Config:
     iou_thresh = 0.5
 
     ####### Loss
-    alpha_coord = 0.5
-    alpha_conf = 100
-    alpha_noobj = 5
-    alpha_cls = 5
+    alpha_coord = 5
+    alpha_conf = 1
+    alpha_noobj = 0.5
+    alpha_cls = 1
