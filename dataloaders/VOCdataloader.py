@@ -14,6 +14,7 @@ class VOCdataset(Dataset):
     # TODO: review the loading parameters (init) for VOC 2007-2012
     def __init__(self, root_path="data/VOCdevkit", year="2007", mode="train", image_size=448, is_training = True):
 
+        self.mode = mode
         if (mode in ["train", "val", "trainval", "test"] and year == "2007") or (
                 mode in ["train", "val", "trainval"] and year == "2012"):
             self.data_path = os.path.join(root_path, "VOC{}".format(year))
@@ -59,4 +60,7 @@ class VOCdataset(Dataset):
 
         image = cv2.resize(image, (Config.im_w, Config.im_h))
 
-        return np.transpose(np.array(image, dtype=np.float32), (2, 0, 1)), np.array(objects, dtype=np.float32)
+        if self.mode == "val":
+            return np.transpose(np.array(image, dtype=np.float32), (2, 0, 1)), np.array(objects, dtype=np.float32), image_path
+        else:
+            return np.transpose(np.array(image, dtype=np.float32), (2, 0, 1)), np.array(objects, dtype=np.float32)
