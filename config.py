@@ -7,13 +7,19 @@ class Config:
     annotations_dir = "/home/mmv/Documents/3.datasets/openlogo/Annotations/"
 
     ####### Model params
-    train_batch_size = 32
-    train_number_epochs = 1000
-    lrate = 0.0005
+    batch_size = 16
+    epochs = 160
+    lr = 0.0001
+    decay_lrs = {60: 0.00001, 90: 0.000001}
+    weight_decay = 0.0005
+    momentum = 0.9
+
+    num_workers = 8
+
 
     # dark 416,416
-    im_w = 448
-    im_h = 448
+    im_w = 416
+    im_h = 416
 
     continue_training = False
 
@@ -26,10 +32,16 @@ class Config:
     S = 14
     B = len(anchors)
 
-    iou_thresh = 0.5
+    thresh = .6
+
+    # testing
+    conf_thresh = 0.005
+    nms_thresh = .45
 
     ####### Loss
-    alpha_coord = 0.5
-    alpha_conf = 100
-    alpha_noobj = 5
-    alpha_cls = 5
+    object_scale = 5
+    noobject_scale = 1
+    class_scale = 1
+    coord_scale = 1
+
+    debug = False

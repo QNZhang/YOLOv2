@@ -1,20 +1,18 @@
 import time
-import cv2
 
 import torch
-import torchvision.datasets as dset
 from torch.utils.data import DataLoader
 from torch import optim
+from torch.autograd import Variable
 
 from dataloaders.VOCdataloader import VOCdataset
-from models.DarkNet19 import DarkNet19
-from loss.YOLOloss import LossMN
+from models.yolov2 import Yolov2
 from misc.utils import Utils
 from config import Config
 
 
 class Trainer:
-
+    """ based on github uvipen and tztztztztz """
     @staticmethod
     def train():
 
@@ -23,40 +21,35 @@ class Trainer:
         print("Training process initialized...")
         print("dataset: ", Config.training_dir)
 
-        #folder_dataset = dset.ImageFolder(root=Config.training_dir)
-
         dataset = VOCdataset(Config.training_dir, "2012", "train", Config.im_w)
 
         train_dataloader = DataLoader(dataset,
                                       shuffle=True,
-                                      num_workers=8,
-                                      batch_size=Config.train_batch_size,
+                                      num_workers=0,#Config.num_workers,
+                                      batch_size=Config.batch_size,
                                       drop_last=True,
                                       collate_fn=Utils.custom_collate_fn)
 
-        print("lr:     ", Config.lrate)
-        print("batch:  ", Config.train_batch_size)
-        print("epochs: ", Config.train_number_epochs)
+        print("lr:     ", Config.lr)
+        print("batch:  ", Config.batch_size)
+        print("epochs: ", Config.epochs)
 
-        net = DarkNet19(dataset.num_classes, Config.anchors)
+        model = Yolov2()
 
-        optimizer = optim.SGD(net.parameters(), lr=Config.lrate, momentum=0.9, weight_decay=0.0005)
+        optimizer = optim.SGD(model.parameters(), lr=Config.lr,
+                              momentum=Config.momentum, weight_decay=Config.weight_decay)
 
         starting_ep = 0
 
         if Config.continue_training:
-            print("Continue training:")
             checkpoint = torch.load(Config.model_path)
-            net.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            model.load_state_dict(checkpoint['model'])
             starting_ep = checkpoint['epoch'] + 1
-            loss = checkpoint['loss']
-            print("epoch: ", starting_ep, ", loss: ", loss)
+            lr = checkpoint['lr']
+            Trainer.adjust_learning_rate(optimizer, lr)
 
-        net.cuda()
-        net.train()
-
-        criterion = LossMN(dataset.num_classes, Config.anchors)
+        model.cuda()
+        model.train()
 
         counter = []
         loss_history = []
@@ -66,71 +59,36 @@ class Trainer:
         best_epoch = 0
         break_counter = 0  # break after 20 epochs without loss improvement
 
-        for epoch in range(starting_ep, Config.train_number_epochs):
+        for epoch in range(starting_ep, Config.epochs):
 
             average_epoch_loss = 0
             count = 0
             start_time = time.time()
 
+            if epoch in Config.decay_lrs:
+                lr = Config.decay_lrs[epoch]
+                Trainer.adjust_learning_rate(optimizer, lr)
+                print('adjust learning rate to {}'.format(lr))
+
             for i, data in enumerate(train_dataloader, 0):
 
-                #print(i)
-                #reset_time = time.time()
+                img, boxes, classes, num_obj = data
+                img, boxes, classes, num_obj = img.cuda(), boxes.cuda(), classes.cuda(), num_obj.cuda()
 
-                img0, img1, targets, ima = data
-                img0, img1 = img0.cuda(), img1.cuda()
+                im_data_variable = Variable(img).cuda()
 
-                #print(type(ima[0]))
+                box_loss, iou_loss, class_loss = model(im_data_variable, boxes,
+                                                       classes, num_obj, training=True)
+
+                loss = box_loss.mean() + iou_loss.mean() + class_loss.mean()
 
                 optimizer.zero_grad()
-
-                #print("Loading data: ", time.time() - reset_time)
-                #reset_time = time.time()
-
-                predictions = net(img0, img1)
-
-                #print("predictions: ", time.time() - reset_time)
-                #reset_time = time.time()
-
-                loc_l, conf_l, noobj_conf_l, loss = criterion(predictions, targets)
-
-                #print("Loss: ", time.time() - reset_time)
-                #reset_time = time.time()
 
                 loss.backward()
                 optimizer.step()
 
-                #print("backprop: ", time.time() - reset_time)
-
                 average_epoch_loss += loss
                 count += 1
-
-                #print("p_mean: ", torch.mean(predictions))
-                #print("p_std : ", torch.std(predictions))
-                #print("mean xy:", torch.mean(predictions[:, :, :, :, :2]))
-                #print("std xy: ", torch.std(predictions[:, :, :, :, :2]))
-                #print("max xy: ", torch.max(predictions[:, :, :, :, :2]))
-                #print("mean wh:", torch.mean(predictions[:, :, :, :, 2:4]))
-                #print("std wh: ", torch.std(predictions[:, :, :, :, 2:4]))
-                #print("max wh: ", torch.max(predictions[:, :, :, :, 2:4]))
-                #print("conf mean: ", torch.mean(torch.sigmoid(predictions[:, :, :, :, 4])))
-                #print("conf max : ", torch.max(torch.sigmoid(predictions[:, :, :, :, 4])))
-
-                #print("=")
-                #print("loss total: ", loss)
-                #print("loss loc :  ", loc_l)
-                #print("loss conf:  ", conf_l)
-                #print("loss nconf: ", noobj_conf_l)
-                #print("loss cls: ", cls_l)
-                #print("====")
-                #cv2.imshow("im", im)
-                #cv2.imshow("iml", iml)
-                #cv2.imshow("imc", imc)
-                #cv2.imshow("imnc", imnc)
-                #cv2.waitKey(1)
-
-                #print(name0)
-                #print(name1)
 
             end_time = time.time() - start_time
             print("time: ", end_time)
@@ -144,25 +102,26 @@ class Trainer:
             loss_history.append(loss.item())
 
             if average_epoch_loss < best_loss:
-                best_loss = average_epoch_loss
-                best_epoch = epoch
-
+                save_name = Config.best_model_path
                 torch.save({
+                    'model': model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
                     'epoch': epoch,
-                    'model_state_dict': net.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
                     'loss': loss,
-                }, Config.best_model_path)
+                    'lr': lr
+                }, save_name)
 
                 print("------------------------Best epoch: ", epoch)
                 break_counter = 0
             else:
+                save_name = Config.model_path
                 torch.save({
+                    'model': model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
                     'epoch': epoch,
-                    'model_state_dict': net.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
                     'loss': loss,
-                }, Config.model_path)
+                    'lr': lr
+                }, save_name)
 
             if break_counter >= 20:
                 print("Training break...")
@@ -172,3 +131,15 @@ class Trainer:
 
         print("best: ", best_epoch)
         Utils.show_plot(counter, loss_history)
+
+    @staticmethod
+    def adjust_learning_rate(optimizer, lr):
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
+
+
+
+
+
+

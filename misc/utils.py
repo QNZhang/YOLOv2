@@ -5,17 +5,47 @@ import matplotlib.pyplot as plt
 
 from random import uniform
 from torch.utils.data.dataloader import default_collate
+import torch
 
 
 class Utils:
 
     def custom_collate_fn(batch):
-        items = list(zip(*batch))
-        items[0] = default_collate(items[0])
-        items[1] = default_collate(items[1])
-        items[2] = list(items[2])
-        items[3] = default_collate(items[3])
-        return items
+        """
+            Collate data of different batch, it is because the boxes and gt_classes have changeable length.
+            This function will pad the boxes and gt_classes with zero.
+
+            Arguments:
+            batch -- list of tuple (im, boxes, gt_classes)
+
+            im_data -- tensor of shape (3, H, W)
+            boxes -- tensor of shape (N, 4)
+            gt_classes -- tensor of shape (N)
+            num_obj -- tensor of shape (1)
+
+            Returns:
+
+            tuple
+            1) tensor of shape (batch_size, 3, H, W)
+            2) tensor of shape (batch_size, N, 4)
+            3) tensor of shape (batch_size, N)
+            4) tensor of shape (batch_size, 1)
+
+            """
+
+        # kind of hack, this will break down a list of tuple into
+        # individual list
+        bsize = len(batch)
+        im_data, boxes, gt_classes, num_obj = zip(*batch)
+        max_num_obj = max([x.item() for x in num_obj])
+        padded_boxes = torch.zeros((bsize, max_num_obj, 4))
+        padded_classes = torch.zeros((bsize, max_num_obj,))
+
+        for i in range(bsize):
+            padded_boxes[i, :num_obj[i], :] = boxes[i]
+            padded_classes[i, :num_obj[i]] = gt_classes[i]
+
+        return torch.stack(im_data, 0), padded_boxes, padded_classes, torch.stack(num_obj, 0)
 
     """ from: https://github.com/uvipen/Yolo-v2-pytorch """
     @staticmethod
@@ -78,7 +108,7 @@ class Crop(object):
         new_ymax = int(max(height - 1 - cropped_bottom * height, ymax))
 
         image = image[new_ymin:new_ymax, new_xmin:new_xmax, :]
-        label = [[lb[0] - new_xmin, lb[1] - new_ymin, lb[2] - new_xmin, lb[3] - new_ymin, lb[4]] for lb in label]
+        label = [[lb[0] - new_xmin, lb[1] - new_ymin, lb[2] - new_xmin, lb[3] - new_ymin] for lb in label]
 
         return image, label
 
@@ -94,7 +124,7 @@ class VerticalFlip(object):
         if uniform(0, 1) >= self.prob:
             image = cv2.flip(image, 1)
             width = image.shape[1]
-            label = [[width - lb[2], lb[1], width - lb[0], lb[3], lb[4]] for lb in label]
+            label = [[width - lb[2], lb[1], width - lb[0], lb[3]] for lb in label]
         return image, label
 
 
@@ -123,13 +153,13 @@ class HSVAdjust(object):
         if uniform(0, 1) >= self.prob:
             adjust_value = 1 / adjust_value
         image = image.astype(np.float32) / 255
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)  # modified
         image[:, :, 0] += adjust_hue
         image[:, :, 0] = clip_hue(image[:, :, 0])
         image[:, :, 1] = np.clip(adjust_saturation * image[:, :, 1], 0.0, 1.0)
         image[:, :, 2] = np.clip(adjust_value * image[:, :, 2], 0.0, 1.0)
 
-        image = cv2.cvtColor(image, cv2.COLOR_HSV2RGB)
+        image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)  # modified
         image = (image * 255).astype(np.float32)
 
         return image, label
@@ -155,6 +185,66 @@ class Resize(object):
             resized_ymax = lb[3] * height_ratio
             resize_width = resized_xmax - resized_xmin
             resize_height = resized_ymax - resized_ymin
-            new_label.append([resized_xmin, resized_ymin, resize_width, resize_height, lb[4]])
+            new_label.append([int(resized_xmin), int(resized_ymin), int(resize_width), int(resize_height)])
 
         return image, new_label
+
+
+class WeightLoader(object):
+    """ https://github.com/tztztztztz/yolov2.pytorch """
+    def __init__(self):
+        super(WeightLoader, self).__init__()
+        self.start = 0
+        self.buf = None
+
+    def load_conv_bn(self, conv_model, bn_model):
+        num_w = conv_model.weight.numel()
+        num_b = bn_model.bias.numel()
+        bn_model.bias.data.copy_(
+            torch.reshape(torch.from_numpy(self.buf[self.start:self.start + num_b]), bn_model.bias.size()))
+        self.start = self.start + num_b
+        bn_model.weight.data.copy_(
+            torch.reshape(torch.from_numpy(self.buf[self.start:self.start + num_b]), bn_model.bias.size()))
+        self.start = self.start + num_b
+        bn_model.running_mean.copy_(
+            torch.reshape(torch.from_numpy(self.buf[self.start:self.start + num_b]), bn_model.bias.size()))
+        self.start = self.start + num_b
+        bn_model.running_var.copy_(
+            torch.reshape(torch.from_numpy(self.buf[self.start:self.start + num_b]), bn_model.bias.size()))
+        self.start = self.start + num_b
+        conv_model.weight.data.copy_(
+            torch.reshape(torch.from_numpy(self.buf[self.start:self.start + num_w]), conv_model.weight.size()))
+        self.start = self.start + num_w
+
+    def load_conv(self, conv_model):
+        num_w = conv_model.weight.numel()
+        num_b = conv_model.bias.numel()
+        conv_model.bias.data.copy_(
+            torch.reshape(torch.from_numpy(self.buf[self.start:self.start + num_b]), conv_model.bias.size()))
+        self.start = self.start + num_b
+        conv_model.weight.data.copy_(
+            torch.reshape(torch.from_numpy(self.buf[self.start:self.start + num_w]), conv_model.weight.size()))
+        self.start = self.start + num_w
+
+    def dfs(self, m):
+        children = list(m.children())
+        for i, c in enumerate(children):
+            if isinstance(c, torch.nn.Sequential):
+                self.dfs(c)
+            elif isinstance(c, torch.nn.Conv2d):
+                if c.bias is not None:
+                    self.load_conv(c)
+                else:
+                    self.load_conv_bn(c, children[i + 1])
+
+    def load(self, model, weights_file):
+        self.start = 0
+        fp = open(weights_file, 'rb')
+        header = np.fromfile(fp, count=4, dtype=np.int32)
+        self.buf = np.fromfile(fp, dtype=np.float32)
+        fp.close()
+        size = self.buf.size
+        self.dfs(model)
+
+        # make sure the loaded weight is right
+        assert size == self.start

@@ -2,6 +2,7 @@
 
 import os
 import cv2
+import torch
 import numpy as np
 import xml.etree.ElementTree as ET
 from torch.utils.data import Dataset
@@ -33,21 +34,34 @@ class VOCdataset(Dataset):
         id = self.ids[item]
         image_path = os.path.join(self.data_path, "JPEGImages", "{}.jpg".format(id))
         image = cv2.imread(image_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image_xml_path = os.path.join(self.data_path, "Annotations", "{}.xml".format(id))
         annot = ET.parse(image_xml_path)
 
-        objects = []
+        boxes = []
+        classes = []
         for obj in annot.findall('object'):
             xmin, xmax, ymin, ymax = [int(obj.find('bndbox').find(tag).text) - 1 for tag in
                                       ["xmin", "xmax", "ymin", "ymax"]]
             label = self.classes.index(obj.find('name').text.lower().strip())
-            objects.append([xmin, ymin, xmax, ymax, label])
+            boxes.append([xmin, ymin, xmax, ymax])
+            classes.append(label)
 
         if self.is_training:
             transformations = Compose([HSVAdjust(), VerticalFlip(), Crop(), Resize(self.image_size)])
         else:
             transformations = Compose([Resize(self.image_size)])
-        image, objects = transformations((image, objects))
+        image, boxes = transformations((image, boxes))
 
-        return np.transpose(np.array(image, dtype=np.float32), (2, 0, 1)), np.array(objects, dtype=np.float32)
+        w, h, _ = image.shape
+        boxes = np.array(boxes, dtype=np.float32)
+        boxes[:, 0::2] = np.clip(boxes[:, 0::2] / w, 0.001, 0.999)
+        boxes[:, 1::2] = np.clip(boxes[:, 1::2] / h, 0.001, 0.999)
+
+        im_data = torch.from_numpy(np.transpose(np.array(image, dtype=np.float32), (2, 0, 1))) / 255
+        boxes = torch.from_numpy(boxes)
+        classes = torch.from_numpy(np.array(classes, dtype=np.int32))
+        num_objs = torch.Tensor([boxes.size(0)]).long()
+
+        #return np.transpose(np.array(image, dtype=np.float32), (2, 0, 1)), np.array(objects, dtype=np.float32)
+        return im_data, boxes, classes, num_objs
