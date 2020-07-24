@@ -5,7 +5,7 @@ import torch
 
 from dataloaders.VOCdataloader import VOCdataset
 from config import Config
-from models.DarkNet19 import DarkNet19
+from models.DarkNet19 import Darknet19
 from misc.utils import Utils
 
 import numpy as np

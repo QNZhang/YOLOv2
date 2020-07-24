@@ -51,6 +51,7 @@ class VOCdataset(Dataset):
             transformations = Compose([HSVAdjust(), VerticalFlip(), Crop(), Resize(self.image_size)])
         else:
             transformations = Compose([Resize(self.image_size)])
+
         image, boxes = transformations((image, boxes))
 
         w, h, _ = image.shape
@@ -62,6 +63,12 @@ class VOCdataset(Dataset):
         boxes = torch.from_numpy(boxes)
         classes = torch.from_numpy(np.array(classes, dtype=np.int32))
         num_objs = torch.Tensor([boxes.size(0)]).long()
+
+        for box in range(boxes.size()[0]):
+            for coord in range(boxes.size()[1]):
+
+                if boxes[box][coord].item() >= 1:
+                    print("error")
 
         #return np.transpose(np.array(image, dtype=np.float32), (2, 0, 1)), np.array(objects, dtype=np.float32)
         return im_data, boxes, classes, num_objs

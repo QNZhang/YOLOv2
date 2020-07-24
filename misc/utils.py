@@ -45,6 +45,13 @@ class Utils:
             padded_boxes[i, :num_obj[i], :] = boxes[i]
             padded_classes[i, :num_obj[i]] = gt_classes[i]
 
+        for i in range(bsize):
+            for box in range(padded_boxes.size()[1]):
+                for coord in range(padded_boxes.size()[2]):
+                    #print(padded_boxes[i][box][coord].item())
+                    if padded_boxes[i][box][coord].item() >= 1:
+                        print("error")
+
         return torch.stack(im_data, 0), padded_boxes, padded_classes, torch.stack(num_obj, 0)
 
     """ from: https://github.com/uvipen/Yolo-v2-pytorch """

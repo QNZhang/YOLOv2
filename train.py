@@ -36,7 +36,8 @@ class Trainer:
 
         model = Yolov2()
 
-        optimizer = optim.SGD(model.parameters(), lr=Config.lr,
+        lr = Config.lr
+        optimizer = optim.SGD(model.parameters(), lr=lr,
                               momentum=Config.momentum, weight_decay=Config.weight_decay)
 
         starting_ep = 0
@@ -75,6 +76,14 @@ class Trainer:
                 img, boxes, classes, num_obj = data
                 img, boxes, classes, num_obj = img.cuda(), boxes.cuda(), classes.cuda(), num_obj.cuda()
 
+                for i in range(Config.batch_size):
+                    for box in range(boxes.size()[1]):
+                        for coord in range(boxes.size()[2]):
+                            # print(padded_boxes[i][box][coord].item())
+                            if boxes[i][box][coord].item() >= 1:
+                                print("error")
+
+
                 im_data_variable = Variable(img).cuda()
 
                 box_loss, iou_loss, class_loss = model(im_data_variable, boxes,
@@ -90,16 +99,28 @@ class Trainer:
                 average_epoch_loss += loss
                 count += 1
 
+                #print(box_loss.mean(), iou_loss.mean(), class_loss.mean())
+                #print(loss)
+
             end_time = time.time() - start_time
             print("time: ", end_time)
 
             iteration_number += 1
             average_epoch_loss = average_epoch_loss / count
-            #print(count)
+
+            #print("#")
+            #print("###############################################################")
 
             print("Epoch number {}\n Current loss {}\n".format(epoch, average_epoch_loss))
             counter.append(iteration_number)
             loss_history.append(loss.item())
+
+
+            #print(box_loss.mean(), iou_loss.mean(), class_loss.mean())
+            #print(loss)
+
+            #print("###############################################################")
+            #print("#")
 
             if average_epoch_loss < best_loss:
                 save_name = Config.best_model_path

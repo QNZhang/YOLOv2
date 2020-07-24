@@ -220,6 +220,23 @@ def yolo_loss(output, target):
     iou_loss = 1 / b * F.mse_loss(conf_pred_batch * iou_mask, iou_target * iou_mask, reduction='sum') / 2.0
     class_loss = 1 / b * cfg.class_scale * F.cross_entropy(class_score_batch_keep, class_target_keep, reduction='sum')
 
+    if iou_loss.mean() != iou_loss.mean():
+
+        for i in range(b):
+            for box in range(padded_boxes.size()[1]):
+                for coord in range(padded_boxes.size()[2]):
+                    #print(padded_boxes[i][box][coord].item())
+                    if padded_boxes[i][box][coord].item() >= 1:
+                        print("error")
+
+        test = conf_pred_batch * iou_mask
+        test2 = iou_target * iou_mask
+        print(conf_pred_batch * iou_mask)
+        print(iou_target * iou_mask)
+        print(F.mse_loss(conf_pred_batch * iou_mask, iou_target * iou_mask, reduction='sum'))
+        print(F.mse_loss(conf_pred_batch * iou_mask, iou_target * iou_mask, reduction='mean'))
+        print(iou_loss)
+
     return box_loss, iou_loss, class_loss
 
 

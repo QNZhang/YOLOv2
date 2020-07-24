@@ -1,8 +1,8 @@
 class Config:
 
     ####### Dataset
-    training_dir = "/home/camilo/Documents/3.datasets"
-    testing_dir = "/home/mmv/Documents/3.datasets/openlogo/preproc/3/testing/"
+    training_dir = "/home/mmv/Documents/3.datasets/VOCdevkit/"
+    testing_dir = "/home/mmv/Documents/3.datasets/VOCdevkit"
 
     annotations_dir = "/home/mmv/Documents/3.datasets/openlogo/Annotations/"
 
