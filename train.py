@@ -73,18 +73,10 @@ class Trainer:
 
             for i, data in enumerate(train_dataloader, 0):
 
-                img, boxes, classes, num_obj = data
-                img, boxes, classes, num_obj = img.cuda(), boxes.cuda(), classes.cuda(), num_obj.cuda()
+                im_data, boxes, gt_classes, num_obj = data
+                im_data, boxes, classes, num_obj = im_data.cuda(), boxes.cuda(), classes.cuda(), num_obj.cuda()
 
-                for i in range(Config.batch_size):
-                    for box in range(boxes.size()[1]):
-                        for coord in range(boxes.size()[2]):
-                            # print(padded_boxes[i][box][coord].item())
-                            if boxes[i][box][coord].item() >= 1:
-                                print("error")
-
-
-                im_data_variable = Variable(img).cuda()
+                im_data_variable = Variable(im_data).cuda()
 
                 box_loss, iou_loss, class_loss = model(im_data_variable, boxes,
                                                        classes, num_obj, training=True)

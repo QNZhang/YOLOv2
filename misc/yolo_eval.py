@@ -187,7 +187,7 @@ def yolo_eval(yolo_output, conf_threshold=0.6, nms_threshold=0.4):
         return []
 
     # scale boxes
-    # boxes = scale_boxes(boxes, im_info)
+    boxes = scale_boxes(boxes, im_info)
 
     if cfg.debug:
         all_boxes = torch.cat([boxes, conf, cls_max_conf, cls_max_id], dim=1)

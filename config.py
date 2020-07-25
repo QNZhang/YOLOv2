@@ -16,7 +16,6 @@ class Config:
 
     num_workers = 8
 
-
     # dark 416,416
     im_w = 416
     im_h = 416
@@ -45,3 +44,9 @@ class Config:
     coord_scale = 1
 
     debug = False
+
+    jitter = 0.3
+
+    saturation = 1.5
+    exposure = 1.5
+    hue = .1

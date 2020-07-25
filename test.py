@@ -5,13 +5,13 @@ import torch
 
 from dataloaders.VOCdataloader import VOCdataset
 from config import Config
-from models.DarkNet19 import Darknet19
+from models.yolov2 import Yolov2
 from misc.utils import Utils
 
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from sklearn.metrics import auc
+#from sklearn.metrics import auc
 
 
 class Tester:
@@ -49,7 +49,7 @@ class Tester:
         # anchors width and height
         anchors = torch.cuda.FloatTensor(Config.anchors)
 
-        net = DarkNet19(dataset.num_classes, Config.anchors)
+        net = Yolov2()
         checkpoint = torch.load(model_path)
         net.load_state_dict(checkpoint['model_state_dict'])
         net.cuda()
@@ -175,8 +175,8 @@ class Tester:
             tpr = np.append(tpr, 0.)
             fpr = np.append(fpr, 0.)
 
-            roc_auc = auc(fpr, tpr)
-            print("auc: ", roc_auc)
+            #roc_auc = auc(fpr, tpr)
+            #print("auc: ", roc_auc)
 
             print("tp: ", tp.tolist())
             print("tn: ", tn.tolist())
@@ -292,87 +292,3 @@ class Tester:
             f.write(detection_str)
         f.close()
 
-    @staticmethod
-    def test_one():
-        print("testing one...")
-
-        Config.train_batch_size = 1
-        thresh = Config.iou_thresh
-
-        mod_path = Config.model_path
-        im_path = "/home/mmv/Documents/3.datasets/openlogo/JPEGImages/371287450.jpg"
-
-        im = cv2.imread(im_path)
-        im = cv2.resize(im, (Config.im_w, Config.im_h))
-
-        test_im = torch.from_numpy(np.transpose(np.array(im, dtype=np.float32), (2, 0, 1))).unsqueeze(0).cuda()
-
-        dataset = VOCdataset(Config.training_dir, "2012", "val", Config.im_w)
-
-        net = DarkNet19(dataset.num_classes, Config.anchors)
-
-        checkpoint = torch.load(mod_path)
-        net.load_state_dict(checkpoint['model_state_dict'])
-        net.cuda()
-        net.eval()
-
-        predictions = net(test_im)
-
-        cw = Config.im_w // Config.S
-        ch = Config.im_h // Config.S
-
-        # anchors width and height
-        anchors = torch.cuda.FloatTensor(Config.anchors)
-
-        # Decode model predictions
-        pred_loc = torch.zeros_like(predictions[:, :, :, :, :4])
-        pred_conf = torch.zeros_like(predictions[:, :, :, :, :1])
-        pred_loc[:, :, :, :, :2] = torch.sigmoid(predictions[:, :, :, :, :2])
-        pred_loc[:, :, :, :, 2:4] = torch.sigmoid(predictions[:, :, :, :, 2:4]) * 0.5
-        pred_conf[:, :, :, :, 0] = torch.sigmoid(predictions[:, :, :, :, 4])
-        pred_cls = predictions[:, :, :, :, 4:4 + dataset.num_classes]
-
-        flag = True
-        while flag:
-
-            cv_im_copy = im.copy()
-
-            for b in range(predictions.data.size(0)):
-                for w in range(predictions.data.size(1)):  # grid w (S)
-                    for h in range(predictions.data.size(2)):  # grid h (S)
-                        for a in range(predictions.data.size(3)):  # grid h (S)
-
-                            # get cell
-                            cell_x = w * cw
-                            cell_y = h * ch
-                            # Draw cell
-                            cv2.rectangle(cv_im_copy, (cell_x, cell_y), (cell_x + cw, cell_y + ch), (50, 50, 50), 1)
-
-                            if pred_conf[b][w][h][a][0] >= thresh:
-                                # decode and format (x1,y1,x2,y2):
-                                loc_x1 = (pred_loc[b][h][w][a][0] * cw) + cell_x
-                                loc_y1 = (pred_loc[b][h][w][a][1] * ch) + cell_y
-                                loc_w = (pred_loc[b][h][w][a][2]).exp() * Config.anchors[a][0] * cw
-                                loc_h = (pred_loc[b][h][w][a][3]).exp() * Config.anchors[a][1] * ch
-                                loc_x1 = max(0, loc_x1 - (loc_w / 2))
-                                loc_y1 = max(0, loc_y1 - (loc_h / 2))
-                                loc_x2 = min(loc_x1 + loc_w, Config.im_w)
-                                loc_y2 = min(loc_y1 + loc_h, Config.im_h)
-
-                                cv2.rectangle(cv_im_copy, (loc_x1, loc_y1), (loc_x2, loc_y2),
-                                              color=(0, 0, 255), thickness=5)
-
-                                cls_txt = dataset.classes[torch.argmax(pred_cls[b, h, w, a, :])]
-                                cv_im_copy = cv2.putText(cv_im_copy, cls_txt, (loc_x1, loc_y1 + 15) , cv2.FONT_HERSHEY_SIMPLEX ,
-                                                    1, (255, 255, 255) , 2, cv2.LINE_AA)
-
-            cv2.imshow("a", cv_im_copy)
-            key = cv2.waitKey(33)
-            if key == ord('w'):
-                thresh += 0.05
-                print(thresh)
-            elif key == ord('s'):
-                thresh -= 0.05
-                print(thresh)
-            elif key == ord('x'):
-                flag = False

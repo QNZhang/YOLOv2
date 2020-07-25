@@ -1,12 +1,9 @@
-
+import torch
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
+from PIL import Image
 
-from random import uniform
-from torch.utils.data.dataloader import default_collate
-import torch
-
+from config import Config
 
 class Utils:
 
@@ -45,157 +42,211 @@ class Utils:
             padded_boxes[i, :num_obj[i], :] = boxes[i]
             padded_classes[i, :num_obj[i]] = gt_classes[i]
 
-        for i in range(bsize):
-            for box in range(padded_boxes.size()[1]):
-                for coord in range(padded_boxes.size()[2]):
-                    #print(padded_boxes[i][box][coord].item())
-                    if padded_boxes[i][box][coord].item() >= 1:
-                        print("error")
-
         return torch.stack(im_data, 0), padded_boxes, padded_classes, torch.stack(num_obj, 0)
 
-    """ from: https://github.com/uvipen/Yolo-v2-pytorch """
-    @staticmethod
-    def bbox_ious(boxes1, boxes2):
-        b1x1, b1y1 = (boxes1[:, :2] - (boxes1[:, 2:4] / 2)).split(1, 1)
-        b1x2, b1y2 = (boxes1[:, :2] + (boxes1[:, 2:4] / 2)).split(1, 1)
-        b2x1, b2y1 = (boxes2[:, :2] - (boxes2[:, 2:4] / 2)).split(1, 1)
-        b2x2, b2y2 = (boxes2[:, :2] + (boxes2[:, 2:4] / 2)).split(1, 1)
 
-        dx = (b1x2.min(b2x2.t()) - b1x1.max(b2x1.t())).clamp(min=0)
-        dy = (b1y2.min(b2y2.t()) - b1y1.max(b2y1.t())).clamp(min=0)
-        intersections = dx * dy
-
-        areas1 = (b1x2 - b1x1) * (b1y2 - b1y1)
-        areas2 = (b2x2 - b2x1) * (b2y2 - b2y1)
-        unions = (areas1 + areas2.t()) - intersections
-
-        return intersections / unions
+""" Data augmentation utils from: https://github.com/tztztztztz """
 
 
-""" Data augmentation utils from: https://github.com/uvipen/Yolo-v2-pytorch """
+def augment_img(img, boxes, gt_classes):
+    """
+    Apply data augmentation.
+    1. convert color to HSV
+    2. adjust hue(.1), saturation(1.5), exposure(1.5)
+    3. convert color to RGB
+    4. random scale (up to 20%)
+    5. translation (up to 20%)
+    6. resize to given input size.
+
+    Arguments:
+    img -- PIL.Image object
+    boxes -- numpy array of shape (N, 4) N is number of boxes, (x1, y1, x2, y2)
+    gt_classes -- numpy array of shape (N). ground truth class index 0 ~ (N-1)
+    im_info -- dictionary {width:, height:}
+
+    Returns:
+    au_img -- numpy array of shape (H, W, 3)
+    au_boxes -- numpy array of shape (N, 4) N is number of boxes, (x1, y1, x2, y2)
+    au_gt_classes -- numpy array of shape (N). ground truth class index 0 ~ (N-1)
+    """
+
+    # img = np.array(img).astype(np.float32)
+    boxes = np.copy(boxes).astype(np.float32)
+
+    for i in range(5):
+        img_t, boxes_t = random_scale_translation(img.copy(), boxes.copy(), jitter=Config.jitter)
+        keep = (boxes_t[:, 0] != boxes_t[:, 2]) & (boxes_t[:, 1] != boxes_t[:, 3])
+        boxes_t = boxes_t[keep, :]
+        if boxes_t.shape[0] > 0:
+            img = img_t
+            boxes = boxes_t
+            gt_classes = gt_classes[keep]
+            break
+
+    img = random_distort(img, Config.hue, Config.saturation, Config.exposure)
+    return img, boxes, gt_classes
 
 
-class Compose(object):
+def random_scale_translation(img, boxes, jitter=0.2):
+    """
 
-    def __init__(self, transforms):
-        self.transforms = transforms
+    Arguments:
+    img -- PIL.Image
+    boxes -- numpy array of shape (N, 4) N is number of boxes
+    factor -- max scale size
+    im_info -- dictionary {width:, height:}
 
-    def __call__(self, data):
-        for function_ in self.transforms:
-            data = function_(data)
-        return data
+    Returns:
+    im_data -- numpy.ndarray
+    boxes -- numpy array of shape (N, 4)
+    """
 
+    w, h = img.size
 
-class Crop(object):
+    dw = int(w*jitter)
+    dh = int(h*jitter)
 
-    def __init__(self, max_crop=0.1):
-        super().__init__()
-        self.max_crop = max_crop
+    pl = np.random.randint(-dw, dw)
+    pr = np.random.randint(-dw, dw)
+    pt = np.random.randint(-dh, dh)
+    pb = np.random.randint(-dh, dh)
 
-    def __call__(self, data):
-        image, label = data
-        height, width = image.shape[:2]
-        xmin = width
-        ymin = height
-        xmax = 0
-        ymax = 0
-        for lb in label:
-            xmin = min(xmin, lb[0])
-            ymin = min(ymin, lb[1])
-            xmax = max(xmax, lb[2])
-            ymax = max(ymax, lb[2])
-        cropped_left = uniform(0, self.max_crop)
-        cropped_right = uniform(0, self.max_crop)
-        cropped_top = uniform(0, self.max_crop)
-        cropped_bottom = uniform(0, self.max_crop)
-        new_xmin = int(min(cropped_left * width, xmin))
-        new_ymin = int(min(cropped_top * height, ymin))
-        new_xmax = int(max(width - 1 - cropped_right * width, xmax))
-        new_ymax = int(max(height - 1 - cropped_bottom * height, ymax))
+    # scaled width, scaled height
+    sw = w - pl - pr
+    sh = h - pt - pb
 
-        image = image[new_ymin:new_ymax, new_xmin:new_xmax, :]
-        label = [[lb[0] - new_xmin, lb[1] - new_ymin, lb[2] - new_xmin, lb[3] - new_ymin] for lb in label]
+    cropped = img.crop((pl, pt, pl + sw - 1, pt + sh - 1))
 
-        return image, label
+    # update boxes accordingly
+    boxes[:, 0::2] -= pl
+    boxes[:, 1::2] -= pt
 
+    # clamp boxes
+    boxes[:, 0::2] = boxes[:, 0::2].clip(0, sw-1)
+    boxes[:, 1::2] = boxes[:, 1::2].clip(0, sh-1)
 
-class VerticalFlip(object):
+    # if flip
+    if np.random.randint(2):
+        cropped = cropped.transpose(Image.FLIP_LEFT_RIGHT)
+        boxes[:, 0::2] = (sw-1) - boxes[:, 2::-2]
 
-    def __init__(self, prob=0.5):
-        super().__init__()
-        self.prob = prob
-
-    def __call__(self, data):
-        image, label = data
-        if uniform(0, 1) >= self.prob:
-            image = cv2.flip(image, 1)
-            width = image.shape[1]
-            label = [[width - lb[2], lb[1], width - lb[0], lb[3]] for lb in label]
-        return image, label
+    return cropped, boxes
 
 
-class HSVAdjust(object):
+def convert_color(img, source, dest):
+    """
+    Convert color
 
-    def __init__(self, hue=30, saturation=1.5, value=1.5, prob=0.5):
-        super().__init__()
-        self.hue = hue
-        self.saturation = saturation
-        self.value = value
-        self.prob = prob
+    Arguments:
+    img -- numpy.ndarray
+    source -- str, original color space
+    dest -- str, target color space.
 
-    def __call__(self, data):
+    Returns:
+    img -- numpy.ndarray
+    """
 
-        def clip_hue(hue_channel):
-            hue_channel[hue_channel >= 360] -= 360
-            hue_channel[hue_channel < 0] += 360
-            return hue_channel
-
-        image, label = data
-        adjust_hue = uniform(-self.hue, self.hue)
-        adjust_saturation = uniform(1, self.saturation)
-        if uniform(0, 1) >= self.prob:
-            adjust_saturation = 1 / adjust_saturation
-        adjust_value = uniform(1, self.value)
-        if uniform(0, 1) >= self.prob:
-            adjust_value = 1 / adjust_value
-        image = image.astype(np.float32) / 255
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)  # modified
-        image[:, :, 0] += adjust_hue
-        image[:, :, 0] = clip_hue(image[:, :, 0])
-        image[:, :, 1] = np.clip(adjust_saturation * image[:, :, 1], 0.0, 1.0)
-        image[:, :, 2] = np.clip(adjust_value * image[:, :, 2], 0.0, 1.0)
-
-        image = cv2.cvtColor(image, cv2.COLOR_HSV2BGR)  # modified
-        image = (image * 255).astype(np.float32)
-
-        return image, label
+    if source == 'RGB' and dest == 'HSV':
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    elif source == 'HSV' and dest == 'RGB':
+        img = cv2.cvtColor(img, cv2.COLOR_HSV2RGB)
+    return img
 
 
-class Resize(object):
+def rand_scale(s):
+    scale = np.random.uniform(1, s)
+    if np.random.randint(1, 10000) % 2:
+        return scale
+    return 1./scale
 
-    def __init__(self, image_size):
-        super().__init__()
-        self.image_size = image_size
 
-    def __call__(self, data):
-        image, label = data
-        height, width = image.shape[:2]
-        image = cv2.resize(image, (self.image_size, self.image_size))
-        width_ratio = float(self.image_size) / width
-        height_ratio = float(self.image_size) / height
-        new_label = []
-        for lb in label:
-            resized_xmin = lb[0] * width_ratio
-            resized_ymin = lb[1] * height_ratio
-            resized_xmax = lb[2] * width_ratio
-            resized_ymax = lb[3] * height_ratio
-            resize_width = resized_xmax - resized_xmin
-            resize_height = resized_ymax - resized_ymin
-            new_label.append([int(resized_xmin), int(resized_ymin), int(resize_width), int(resize_height)])
+def random_distort(img, hue=.1, sat=1.5, val=1.5):
 
-        return image, new_label
+    hue = np.random.uniform(-hue, hue)
+    sat = rand_scale(sat)
+    val = rand_scale(val)
 
+    img = img.convert('HSV')
+    cs = list(img.split())
+    cs[1] = cs[1].point(lambda i: i * sat)
+    cs[2] = cs[2].point(lambda i: i * val)
+
+    def change_hue(x):
+        x += hue * 255
+        if x > 255:
+            x -= 255
+        if x < 0:
+            x += 255
+        return x
+
+    cs[0] = cs[0].point(change_hue)
+    img = Image.merge(img.mode, tuple(cs))
+
+    img = img.convert('RGB')
+    return img
+
+
+def random_hue(img, rate=.1):
+    """
+    adjust hue
+    Arguments:
+    img -- numpy.ndarray
+    rate -- float, factor used to adjust hue
+    Returns:
+    img -- numpy.ndarray
+    """
+
+    delta = rate * 360.0 / 2
+
+    if np.random.randint(2):
+        img[:, :, 0] += np.random.uniform(-delta, delta)
+        img[:, :, 0] = np.clip(img[:, :, 0], a_min=0.0, a_max=360.0)
+
+    return img
+
+
+def random_saturation(img, rate=1.5):
+    """
+    adjust saturation
+
+    Arguments:
+    img -- numpy.ndarray
+    rate -- float, factor used to adjust hue
+
+    Returns:
+    img -- numpy.ndarray
+    """
+
+    lower = 0.5  # hard code
+    upper = rate
+
+    if np.random.randint(2):
+        img[:, :, 1] *= np.random.uniform(lower, upper)
+        img[:, :, 1] = np.clip(img[:, :, 1], a_min=0.0, a_max=1.0)
+
+    return img
+
+
+def random_exposure(img, rate=1.5):
+    """
+    adjust exposure (In fact, this function change V (HSV))
+
+    Arguments:
+    img -- numpy.ndarray
+    rate -- float, factor used to adjust hue
+
+    Returns:
+    img -- numpy.ndarray
+    """
+
+    lower = 0.5  # hard code
+    upper = rate
+
+    if np.random.randint(2):
+        img[:, :, 2] *= np.random.uniform(lower, upper)
+        img[:, :, 2] = np.clip(img[:, :, 2], a_min=0.0, a_max=255.0)
+
+    return img
 
 class WeightLoader(object):
     """ https://github.com/tztztztztz/yolov2.pytorch """
