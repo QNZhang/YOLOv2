@@ -73,7 +73,7 @@ class Trainer:
 
             for i, data in enumerate(train_dataloader, 0):
 
-                im_data, boxes, gt_classes, num_obj = data
+                im_data, boxes, classes, num_obj = data
                 im_data, boxes, classes, num_obj = im_data.cuda(), boxes.cuda(), classes.cuda(), num_obj.cuda()
 
                 im_data_variable = Variable(im_data).cuda()
