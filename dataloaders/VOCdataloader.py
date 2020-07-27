@@ -50,6 +50,8 @@ class VOCdataset(Dataset):
             boxes.append([xmin, ymin, xmax, ymax])
             classes.append(label)
 
+        boxes = np.asarray(boxes, dtype=np.int32)
+        classes = np.asarray(classes, dtype=np.int32)
         im_info = torch.FloatTensor([im_data.size[0], im_data.size[1]])
 
         if self.is_training:
