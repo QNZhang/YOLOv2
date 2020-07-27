@@ -50,3 +50,5 @@ class Config:
     saturation = 1.5
     exposure = 1.5
     hue = .1
+
+    strides = 32

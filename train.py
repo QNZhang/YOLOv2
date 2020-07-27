@@ -25,7 +25,7 @@ class Trainer:
 
         train_dataloader = DataLoader(dataset,
                                       shuffle=True,
-                                      num_workers=0,#Config.num_workers,
+                                      num_workers=Config.num_workers,
                                       batch_size=Config.batch_size,
                                       drop_last=True,
                                       collate_fn=Utils.custom_collate_fn)

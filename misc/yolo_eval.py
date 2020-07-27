@@ -99,8 +99,8 @@ def generate_prediction_boxes(deltas_pred):
     boxes_pred -- tensor of shape (H * W * num_anchors, 4)  (x1, y1, x2, y2)
     """
 
-    H = int(cfg.test_input_size[0] / cfg.strides)
-    W = int(cfg.test_input_size[1] / cfg.strides)
+    H = int(cfg.im_w / cfg.strides)
+    W = int(cfg.im_h / cfg.strides)
 
     anchors = torch.FloatTensor(cfg.anchors)
     all_anchors_xywh = generate_all_anchors(anchors, H, W) # shape: (H * W * num_anchors, 4), format: (x, y, w, h)
@@ -128,7 +128,7 @@ def scale_boxes(boxes, im_info):
     h = im_info['height']
     w = im_info['width']
 
-    input_h, input_w = cfg.test_input_size
+    input_h, input_w = cfg.im_h, cfg.im_h
     scale_h, scale_w = input_h / h, input_w / w
 
     # scale the boxes

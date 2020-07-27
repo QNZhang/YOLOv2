@@ -40,14 +40,13 @@ class Tester:
         print("conf: ", conf_threshs.tolist())
         print("iou thresh:  ", iou_thresh)
 
-        dataset = VOCdataset(Config.training_dir, "2012", "val", Config.im_w)
+        dataset = VOCdataset(Config.training_dir, "2012", "val", Config.im_w, is_training=False)
 
         dataloader = DataLoader(dataset,
                                       shuffle=False,
                                       num_workers=0,
-                                      batch_size=Config.train_batch_size,
-                                      drop_last=True,
-                                      collate_fn=Utils.custom_collate_fn)
+                                      batch_size=Config.batch_size,
+                                      drop_last=True)
 
         model = Yolov2()
 
@@ -74,9 +73,10 @@ class Tester:
 
                 yolo_outputs = model(im_data_variable)
 
-                im_info = {'width': im_infos[0], 'height': im_infos[1]}
+                im_info = {'width': im_infos[0][0], 'height': im_infos[0][1]}
+                output = [item[0].data for item in yolo_outputs]
 
-                detections = yolo_eval(yolo_outputs.data, im_info, conf_threshold=Config.conf_thresh,
+                detections = yolo_eval(output, im_info, conf_threshold=Config.conf_thresh,
                                        nms_threshold=Config.nms_thresh)
 
                 if len(detections) > 0:
