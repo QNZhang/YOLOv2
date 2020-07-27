@@ -146,7 +146,7 @@ def scale_boxes(boxes, im_info):
     return boxes
 
 
-def yolo_eval(yolo_output, conf_threshold=0.6, nms_threshold=0.4):
+def yolo_eval(yolo_output, im_info, conf_threshold=0.6, nms_threshold=0.4):
     """
     Evaluate the yolo output, generate the final predicted boxes
 
