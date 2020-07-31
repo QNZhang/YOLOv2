@@ -83,9 +83,6 @@ class Yolov2(nn.Module):
         x = torch.cat([shortcut, x], dim=1)
         out = self.conv4(x)
 
-        if cfg.debug:
-            print('check output', out.view(-1)[0:10])
-
         # out -- tensor of shape (B, num_anchors * (5 + num_classes), H, W)
         bsize, _, h, w = out.size()
 
@@ -116,6 +113,7 @@ class Yolov2(nn.Module):
             return box_loss, iou_loss, class_loss
 
         return delta_pred, conf_pred, class_pred
+
 
 if __name__ == '__main__':
     model = Yolov2()

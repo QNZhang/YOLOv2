@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch import optim
 from torch.autograd import Variable
+import matplotlib.pyplot as plt
 
 from dataloaders.VOCdataloader import VOCdataset
 from models.yolov2 import Yolov2
@@ -16,12 +17,10 @@ class Trainer:
     @staticmethod
     def train():
 
-        torch.cuda.manual_seed(123)
-
         print("Training process initialized...")
-        print("dataset: ", Config.training_dir)
+        print("dataset: ", Config.dataset_dir)
 
-        dataset = VOCdataset(Config.training_dir, "2012", "train", Config.im_w)
+        dataset = VOCdataset(Config.dataset_dir, "2007", "train", Config.im_w)
 
         train_dataloader = DataLoader(dataset,
                                       shuffle=True,
@@ -91,30 +90,18 @@ class Trainer:
                 average_epoch_loss += loss
                 count += 1
 
-                #print(box_loss.mean(), iou_loss.mean(), class_loss.mean())
-                #print(loss)
-
             end_time = time.time() - start_time
             print("time: ", end_time)
 
             iteration_number += 1
             average_epoch_loss = average_epoch_loss / count
 
-            #print("#")
-            #print("###############################################################")
-
             print("Epoch number {}\n Current loss {}\n".format(epoch, average_epoch_loss))
             counter.append(iteration_number)
             loss_history.append(loss.item())
 
-
-            #print(box_loss.mean(), iou_loss.mean(), class_loss.mean())
-            #print(loss)
-
-            #print("###############################################################")
-            #print("#")
-
             if average_epoch_loss < best_loss:
+                best_epoch = epoch
                 save_name = Config.best_model_path
                 torch.save({
                     'model': model.state_dict(),
@@ -126,24 +113,25 @@ class Trainer:
 
                 print("------------------------Best epoch: ", epoch)
                 break_counter = 0
-            else:
-                save_name = Config.model_path
-                torch.save({
-                    'model': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'epoch': epoch,
-                    'loss': loss,
-                    'lr': lr
-                }, save_name)
+
+            save_name = Config.model_path
+            torch.save({
+                'model': model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'epoch': epoch,
+                'loss': loss,
+                'lr': lr
+            }, save_name)
 
             if break_counter >= 20:
                 print("Training break...")
-                #break
+                break
 
             break_counter += 1
 
         print("best: ", best_epoch)
-        Utils.show_plot(counter, loss_history)
+        plt.plot(counter, loss_history)
+        plt.show()
 
     @staticmethod
     def adjust_learning_rate(optimizer, lr):

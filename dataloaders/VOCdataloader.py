@@ -16,7 +16,7 @@ class VOCdataset(Dataset):
     def __init__(self, root_path="data/VOCdevkit", year="2007", mode="train", image_size=448, is_training = True):
 
         if (mode in ["train", "val", "trainval", "test"] and year == "2007") or (
-                mode in ["train", "val", "trainval"] and year == "2012"):
+                mode in ["train", "val", "trainval", "test"] and year == "2012"):
             self.data_path = os.path.join(root_path, "VOC{}".format(year))
         id_list_path = os.path.join(self.data_path, "ImageSets/Main/{}.txt".format(mode))
         self.ids = [id.strip() for id in open(id_list_path)]
@@ -77,4 +77,4 @@ class VOCdataset(Dataset):
             im_data = im_data.resize((input_w, input_h))
             im_data_resize = torch.from_numpy(np.array(im_data)).float() / 255
             im_data_resize = im_data_resize.permute(2, 0, 1)
-            return im_data_resize, im_info
+            return im_data_resize, id, im_info, boxes, label

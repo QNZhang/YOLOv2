@@ -5,6 +5,7 @@ from PIL import Image
 
 from config import Config
 
+
 class Utils:
 
     def custom_collate_fn(batch):

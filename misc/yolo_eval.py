@@ -175,10 +175,6 @@ def yolo_eval(yolo_output, im_info, conf_threshold=0.6, nms_threshold=0.4):
 
     boxes = generate_prediction_boxes(deltas)
 
-    if cfg.debug:
-        print('check box: ', boxes.view(13*13, 5, 4).permute(1, 0, 2).contiguous().view(-1,4)[0:10,:])
-        print('check conf: ', conf.view(13*13, 5).permute(1,0).contiguous().view(-1)[:10])
-
     # filter boxes on confidence score
     boxes, conf, cls_max_conf, cls_max_id = yolo_filter_boxes(boxes, conf, classes, conf_threshold)
 
@@ -189,10 +185,6 @@ def yolo_eval(yolo_output, im_info, conf_threshold=0.6, nms_threshold=0.4):
     # scale boxes
     boxes = scale_boxes(boxes, im_info)
 
-    if cfg.debug:
-        all_boxes = torch.cat([boxes, conf, cls_max_conf, cls_max_id], dim=1)
-        print('check all boxes: ', all_boxes)
-        print('check all boxes len: ', len(all_boxes))
     #
     # apply nms
     # keep = yolo_nms(boxes, conf.view(-1), nms_threshold)
