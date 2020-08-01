@@ -39,7 +39,7 @@ class Config:
     conf_thresh = 0.5
     nms_thresh = .45
 
-    mAP_path = "/home/mmv/Documents/2.projects/Object-Detection-Metrics-master/"  # path to mAP repository
+    mAP_path = "path_to_VOC_Object-Detection-Metrics-repo/"  # path to mAP repository
 
     ####### Loss
     object_scale = 5

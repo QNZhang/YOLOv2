@@ -101,6 +101,7 @@ class Trainer:
             loss_history.append(loss.item())
 
             if average_epoch_loss < best_loss:
+                best_loss = average_epoch_loss
                 best_epoch = epoch
                 save_name = Config.best_model_path
                 torch.save({
